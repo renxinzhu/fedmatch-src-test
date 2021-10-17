@@ -78,7 +78,13 @@ def regularization_loss(sigma: Iterable[Parameter], psi: Iterable[Parameter], la
 
 def src_loss(local_last_feature_map: torch.Tensor, helper_last_feature_maps: List[torch.Tensor], BATCH_SIZE:int):
     # mean_feature_map vs local_last_feature_map
-    mean_feature_map = helper_last_feature_maps.mean()
+    mean_feature_map = torch.mean(helper_last_feature_maps)
+    #shape = helper_last_feature_maps.shape()
+    #total_feature_map = torch.empty(shape)
+    #for i in range(len(helper_last_feature_maps)):
+    #   total_feature_map += helper_last_feature_maps[i]
+    #    mean_feature_map = total_feature_map/len(helper_last_feature_maps)
+
 
     # reshape
     # reshape F into A

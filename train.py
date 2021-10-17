@@ -5,6 +5,8 @@ from server import Server
 from datasets import generate_dataloaders, generate_test_dataloader
 from logger import Logger
 from hyper_parameters import hyper_parameters, setting
+import pdb
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'Using {device}.')

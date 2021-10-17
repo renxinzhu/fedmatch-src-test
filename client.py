@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data.dataloader import DataLoader
 from base_model import Backbone, Model
 from hyper_parameters import HyperParameters
-from loss import iccs_loss, regularization_loss
+from loss import iccs_loss, regularization_loss,src_loss
 from custom_types import IStateDict
 
 from typing import List, cast
@@ -41,7 +41,7 @@ class Client(Backbone):
                 X = X.to(device)
                 y = y.to(device)
 
-                pred = self.forward(X)
+                pred,last_feature_map_useless = self.forward(X)
                 loss = loss_fn(pred, y) * self.hyper_parameters.lambda_s
 
                 opt.zero_grad()
@@ -49,8 +49,7 @@ class Client(Backbone):
                 opt.step()
 
     def _train_unsupervised(self):
-        opt = torch.optim.SGD(self.get_psi_parameters(
-            True), lr=self.hyper_parameters.lr)
+        opt = torch.optim.SGD(self.get_psi_parameters(True), lr=self.hyper_parameters.lr)
         confident_counts = 0
 
         for _ in range(self.hyper_parameters.local_epochs):
@@ -58,7 +57,7 @@ class Client(Backbone):
                 X = X.to(device)
                 noised_X = noised_X.to(device)
 
-                output = self.forward(X)
+                output,_ = self.forward(X)
                 pred = F.softmax(output, dim=-1)
 
                 max_values = cast(torch.Tensor, torch.max(pred, dim=1).values)
@@ -80,11 +79,15 @@ class Client(Backbone):
                     confident_noised_X = noised_X[confident_idxes]
                     confident_X = X[confident_idxes]
 
-                    noised_pred = self.forward(confident_noised_X)
-                    helper_preds = self._helper_predictions(confident_X)
+                    noised_pred,_ = self.forward(confident_noised_X)
+                    helper_preds_1,helper_last_feature_maps_1 = self._helper_predictions(confident_X)
 
                     loss += iccs_loss(confident_pred,
-                                      noised_pred, helper_preds, self.hyper_parameters.lambda_iccs)
+                                      noised_pred, helper_preds_1, self.hyper_parameters.lambda_iccs)
+                    ###修改+不确定
+                    model = Model()
+                    out_useles,local_last_feature_map = model.forward(X)
+                    loss += src_loss(local_last_feature_map,helper_last_feature_maps_1,BATCH_SIZE=50)
 
                 opt.zero_grad()
                 loss.backward()
@@ -93,10 +96,12 @@ class Client(Backbone):
         if confident_counts:
             print('# confident preds: ', confident_counts)
 
+    ###修改
     def _helper_predictions(self, X: torch.Tensor):
         '''make prediction one by one instead of creating all in the RAM to reduce RAM usage'''
         with torch.no_grad():
             helpers_pred = []
+            helper_last_feature_maps = []
             for helper_psi in self.helper_psis:
                 model = Model()
 
@@ -104,6 +109,8 @@ class Client(Backbone):
                     self.state_dict(), helper_psi)
                 model.load_state_dict(state_dict)
 
-                pred = model(X)
+                ###比上src1.0修改了
+                pred,helper_last_feature_map = model.forward(X)
+                helper_last_feature_maps.append(helper_last_feature_map)
                 helpers_pred.append(pred)
-            return helpers_pred
+            return helpers_pred,helper_last_feature_maps

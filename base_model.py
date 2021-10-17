@@ -57,11 +57,11 @@ class Model(DModule):
         out = self.max_pool(out)
 
         out = self.cnn_block5(out) + out
-        out = self.last_max_pool(out)
+        last_feature_map = self.last_max_pool(out)
 
-        out = self.fcl(self.flatten(out))
+        out = self.fcl(self.flatten(last_feature_map))
 
-        return out
+        return out,last_feature_map
 
 
 class Backbone(Model):
@@ -73,7 +73,7 @@ class Backbone(Model):
                 X = X.to(device)
                 y = y.to(device)
 
-                pred = self.forward(X)
+                pred,_ = self.forward(X)
                 correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
         return correct / len(dataloader.dataset)
